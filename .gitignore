@@ -1,0 +1,15 @@
+# Environnement virtuel
+venv/
+.venv/
+
+# Cache Python
+__pycache__/
+*.pyc
+
+# Bases de données et rapports Excel générés
+*.db
+*.xlsx
+
+# Fichiers système & VS Code
+.vscode/
+.DS_Store
