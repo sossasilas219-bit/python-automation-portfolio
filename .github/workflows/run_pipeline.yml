@@ -1,0 +1,29 @@
+name: Automated Market Intelligence Pipeline
+
+on:
+  schedule:
+    - cron: '0 8 * * *' # S'exécute automatiquement tous les jours à 08h00 UTC
+  workflow_dispatch: # Permet le déclenchement manuel en un clic sur GitHub
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run Pipeline
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+        run: python pipeline.py

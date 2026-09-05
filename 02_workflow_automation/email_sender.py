@@ -51,4 +51,4 @@ def send_client_report(recipient_email, report_path):
 
     except Exception as e:
         logging.error(f"Erreur d'envoi de l'e-mail : {e}")
-        raise e
+        raise 
