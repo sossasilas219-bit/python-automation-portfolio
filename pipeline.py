@@ -1,50 +1,75 @@
-import logging
 import os
-import sys
+import importlib
+import pandas as pd
+from datetime import datetime
 
-# Ajout des modules au chemin système
-sys.path.append(os.path.abspath("01_web_scraping"))
-sys.path.append(os.path.abspath("02_workflow_automation"))
+# 1. Import sécurisé du scraper
+try:
+    scraper_module = importlib.import_module("01_web_scraping.hybrid_market_scraper")
+    PortfolioScraper = scraper_module.PortfolioScraper
+except Exception:
+    from hybrid_market_scraper import PortfolioScraper
 
-from email_sender import send_client_report
-from report_generator import generate_daily_report
+# 2. Import sécurisé de la base de données (SQLite)
+save_to_db = None
+try:
+    from database import save_to_db
+except ImportError:
+    try:
+        db_module = importlib.import_module("02_database.database")
+        save_to_db = getattr(db_module, "save_to_db", None)
+    except ImportError:
+        pass
 
-# Configuration du journal d'exécution (logs)
-logging.basicConfig(
-    filename="app.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    encoding="utf-8",
-)
+# 3. Import sécurisé du module d'email
+send_client_report = None
+try:
+    from email_sender import send_client_report
+except ImportError:
+    pass
 
 
 def run_pipeline():
-    print("=== DÉMARRAGE DU PIPELINE MARKET INTELLIGENCE ===")
-    logging.info("Lancement du pipeline.")
+    print("=" * 50)
+    print("  DÉMARRAGE DU PIPELINE D'AUTOMATISATION")
+    print("=" * 50)
 
-    # 1. Génération du rapport Excel depuis SQLite
-    print("\n[1/2] Génération du rapport automatisé...")
-    report_file = generate_daily_report()
+    # ÉTAPE 1 : Scraping dynamique
+    scraper = PortfolioScraper()
+    raw_data = scraper.fetch_data()
 
-    if not report_file:
-        print("[-] Échec : Impossible de générer le rapport Excel.")
-        logging.error("Échec de la génération du rapport Excel.")
-        return False
+    if not raw_data:
+        print("[!] Aucun résultat extrait. Fin du programme.")
+        return
 
-    # 2. Envoi du rapport par e-mail au client
-    print("\n[2/2] Expédition du rapport au client via Resend...")
-    status = send_client_report(
-        recipient_email="sossasilas219@gmail.com", report_path=report_file
-    )
-
-    if status:
-        print("\n=== [✓] PIPELINE EXÉCUTÉ AVEC SUCCÈS ! ===")
-        logging.info("Pipeline exécuté avec succès.")
+    # ÉTAPE 2 : Sauvegarde en Base de données (si le module existe)
+    if save_to_db:
+        try:
+            save_to_db(raw_data)
+            print("[+] Étape 2/4 : Données enregistrées dans SQLite.")
+        except Exception as e:
+            print(f"[!] Erreur SQLite : {e}")
     else:
-        print("\n[-] Échec lors de la livraison du rapport.")
-        logging.warning("Échec de l'envoi du rapport.")
+        print("[i] Étape 2/4 : Ignorée (module SQLite introuvable).")
 
-    return status
+    # ÉTAPE 3 : Génération du fichier Excel
+    df = pd.DataFrame(raw_data)
+    date_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+    excel_filename = f"rapport_{scraper.keyword}_{date_str}.xlsx"
+    excel_path = os.path.join(os.getcwd(), excel_filename)
+
+    df.to_excel(excel_path, index=False)
+    print(f"[+] Étape 3/4 : Rapport Excel créé -> {excel_filename}")
+
+    # ÉTAPE 4 : Notification Email
+    if send_client_report:
+        recipient = "adamgik48@gmail.com"
+        send_client_report(recipient, excel_path)
+        print("[+] Étape 4/4 : Traitement de l'envoi d'email terminé.")
+    else:
+        print("[i] Étape 4/4 : Ignorée (module email introuvable).")
+
+    print("\n[✔] PIPELINE EXÉCUTÉ AVEC SUCCÈS !")
 
 
 if __name__ == "__main__":

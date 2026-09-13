@@ -1,114 +1,121 @@
-import re
-from datetime import datetime
-from urllib.parse import quote_plus
 import pandas as pd
 import requests
+from playwright.sync_api import sync_playwright
 
 
 class PortfolioScraper:
-    """Scraper hybride résilient pour e-commerce."""
 
-    def __init__(self, keyword: str = None):
-        if not keyword:
-            keyword = input("Que souhaitez-vous scraper aujourd'hui ? : ").strip()
+  def __init__(self, query: str, sources: list = None):
+    self.query = query
+    self.sources = (
+        sources
+        if sources
+        else [
+            "DummyJSON Store",
+            "Global Market B",
+            "Site Web Cible (Playwright)",
+        ]
+    )
 
-        while not keyword:
-            keyword = input("Veuillez saisir un mot-clé valide : ").strip()
+  def scrape_dummyjson(self) -> pd.DataFrame:
+    url = f"https://dummyjson.com/products/search?q={self.query}&limit=50"
+    try:
+      response = requests.get(url, timeout=10)
+      if response.status_code == 200:
+        data = response.json().get("products", [])
+        items = []
+        for p in data:
+          items.append({
+              "title": p.get("title", "Inconnu"),
+              "price": float(p.get("price", 0.0)),
+              "rating": float(p.get("rating", 0.0)),
+              "source": "DummyJSON Store",
+          })
+        return pd.DataFrame(items)
+    except Exception as e:
+      print(f"[!] Erreur sur DummyJSON : {e}")
+    return pd.DataFrame()
 
-        self.keyword = keyword
-        self.headers = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/122.0.0.0 Safari/537.36"
-            ),
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-        print(f"\n[+] Recherche lancée pour : '{self.keyword}'\n")
+  def scrape_alternative_source(self) -> pd.DataFrame:
+    url = "https://fakestoreapi.com/products"
+    try:
+      response = requests.get(url, timeout=10)
+      if response.status_code == 200:
+        data = response.json()
+        items = []
+        for p in data:
+          title = p.get("title", "")
+          if self.query.lower() in title.lower() or self.query.lower() in p.get(
+              "category", ""
+          ).lower():
+            items.append({
+                "title": title,
+                "price": float(p.get("price", 0.0)),
+                "rating": float(p.get("rating", {}).get("rate", 0.0)),
+                "source": "Global Market B",
+            })
+        return pd.DataFrame(items)
+    except Exception as e:
+      print(f"[!] Erreur sur la source alternative : {e}")
+    return pd.DataFrame()
 
-    def _clean_price(self, text: str) -> float | None:
-        """Extrait la valeur numérique d'un prix."""
-        if not text:
-            return None
-        clean = text.replace("$", "").replace(",", "").strip()
-        match = re.search(r"\d+\.?\d*", clean)
-        if match:
-            try:
-                return float(match.group())
-            except ValueError:
-                return None
-        return None
+  def scrape_with_playwright(self) -> pd.DataFrame:
+    """Simule un vrai navigateur pour contourner les protections JS et extraire le DOM."""
+    items = []
+    # Exemple d'URL de recherche (remplace par le site e-commerce de ton choix)
+    target_url = f"https://quotes.toscrape.com/search.aspx"  # Site d'entraînement ou e-commerce cible
 
-    def fetch_data(self) -> list[dict]:
-        """Récupère les données d'eBay HTML ou bascule sur l'API e-commerce de secours."""
-        results = []
-        encoded_query = quote_plus(self.keyword)
+    with sync_playwright() as p:
+      # Lancement d'un navigateur Chromium invisible (headless=True)
+      browser = p.chromium.launch(headless=True)
+      page = browser.new_page()
+      try:
+        page.goto(target_url, timeout=15000)
 
-        # 1. Tentative sur eBay HTML
-        ebay_url = f"https://www.ebay.com/sch/i.html?_nkw={encoded_query}"
-        try:
-            response = requests.get(ebay_url, headers=self.headers, timeout=10)
-            if response.status_code == 200:
-                items = re.findall(
-                    r'class="s-item__title"[^>]*>(?:<span[^>]*>)?(.*?)(?:</span>)?</[^>]+>.*?class="s-item__price"[^>]*>(.*?)</span>',
-                    response.text,
-                    re.DOTALL,
-                )
+        # Exemple d'interaction dynamique (si le site nécessite de taper dans une barre de recherche)
+        # page.fill("input#search", self.query)
+        # page.press("input#search", "Enter")
+        # page.wait_for_selector(".product-card", timeout=5000)
 
-                for title_raw, price_raw in items:
-                    title = re.sub(r"<[^>]+>", "", title_raw).strip()
-                    if "Shop on eBay" in title or not title:
-                        continue
+        # Extraction des éléments de la page
+        # (Adapte les sélecteurs CSS '.product-title' et '.product-price' selon le site ciblé)
+        products = page.query_selector_all(
+            ".quote"
+        )  # Remplacer par le sélecteur des articles
+        for prod in products:
+          title_element = prod.query_selector(".text")
+          title = title_element.inner_text() if title_element else self.query
 
-                    price = self._clean_price(price_raw)
-                    if title and price:
-                        results.append(
-                            {
-                                "type": "Revente (Retail)",
-                                "platform": "eBay US",
-                                "search_term": self.keyword,
-                                "title": title[:80],
-                                "price_usd": price,
-                                "timestamp": datetime.now().strftime(
-                                    "%Y-%m-%d %H:%M:%S"
-                                ),
-                            }
-                        )
-        except Exception as e:
-            print(f"[!] Erreur sur la source principale : {e}")
+          # Simulation d'un prix pour l'exemple basé sur la longueur du texte
+          items.append({
+              "title": title[:50],
+              "price": float(len(title) % 50 + 10),  # Prix fictif ou extrait du DOM
+              "rating": 4.5,
+              "source": "Site Web Cible (Playwright)",
+          })
+      except Exception as e:
+        print(f"[!] Erreur Playwright : {e}")
+      finally:
+        browser.close()
 
-        # 2. Source de secours (API E-Commerce publique) si 0 résultat
-        if not results:
-            print("[i] Basculement automatique sur l'API e-commerce de secours...")
-            try:
-                fallback_url = f"https://dummyjson.com/products/search?q={encoded_query}"
-                res = requests.get(fallback_url, timeout=10).json()
-                for prod in res.get("products", []):
-                    results.append(
-                        {
-                            "type": "Revente (Retail)",
-                            "platform": "Global Market API",
-                            "search_term": self.keyword,
-                            "title": prod.get("title", ""),
-                            "price_usd": float(prod.get("price", 0)),
-                            "timestamp": datetime.now().strftime(
-                                "%Y-%m-%d %H:%M:%S"
-                            ),
-                        }
-                    )
-            except Exception as e:
-                print(f"[!] Erreur sur la source de secours : {e}")
+    return pd.DataFrame(items)
 
-        return results
+  def run(self) -> pd.DataFrame:
+    print(f"[*] Lancement de l'agrégation multi-sources pour : {self.query}")
+    dfs = []
 
+    if "DummyJSON Store" in self.sources:
+      dfs.append(self.scrape_dummyjson())
+    if "Global Market B" in self.sources:
+      dfs.append(self.scrape_alternative_source())
+    if "Site Web Cible (Playwright)" in self.sources:
+      dfs.append(self.scrape_with_playwright())
 
-if __name__ == "__main__":
-    scraper = PortfolioScraper()
-    data = scraper.fetch_data()
+    if dfs:
+      combined_df = pd.concat(dfs, ignore_index=True)
+      if not combined_df.empty:
+        combined_df = combined_df.sort_values(by="price", ascending=True)
+        combined_df = combined_df.reset_index(drop=True)
+      return combined_df
 
-    if data:
-        df = pd.DataFrame(data)
-        print("\n--- RÉSULTATS DU SCRAPING ---")
-        print(df.to_string(index=False))
-    else:
-        print("[!] Aucun résultat trouvé pour cette recherche.")
+    return pd.DataFrame()

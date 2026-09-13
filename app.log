@@ -1,2 +1,10 @@
 2026-09-04 13:16:28,803 - INFO - Lancement du pipeline.
 2026-09-04 13:16:29,575 - WARNING - Échec de l'envoi du rapport.
+2026-09-08 18:30:40,071 - INFO - Lancement du pipeline.
+2026-09-08 18:30:41,192 - ERROR - Erreur d'envoi de l'e-mail : Request failed: HTTPSConnectionPool(host='api.resend.com', port=443): Max retries exceeded with url: /emails (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1081)')))
+2026-09-08 18:30:53,286 - INFO - Lancement du pipeline.
+2026-09-08 18:30:54,068 - ERROR - Erreur d'envoi de l'e-mail : Request failed: HTTPSConnectionPool(host='api.resend.com', port=443): Max retries exceeded with url: /emails (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1081)')))
+2026-09-09 15:13:40,677 - INFO - Lancement du pipeline.
+2026-09-09 15:13:43,946 - ERROR - Erreur d'envoi de l'e-mail : API key is invalid
+2026-09-09 15:17:20,659 - INFO - Lancement du pipeline.
+2026-09-09 15:17:23,352 - INFO - Pipeline exécuté avec succès.
